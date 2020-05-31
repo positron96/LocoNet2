@@ -16,6 +16,7 @@ constexpr uint32_t CDBackoffTimeoutIncrement = LocoNetTickTime * LN_CARRIER_TICK
 #define LOCONET_TX_LOCK()    do {} while (xSemaphoreTake(_txQueuelock, portMAX_DELAY) != pdPASS)
 #define LOCONET_TX_UNLOCK()  xSemaphoreGive(_txQueuelock)
 
+#include <HardwareSerial.h>
 
 
 extern "C" void uartDetachRx(uart_t* uart);
@@ -147,13 +148,17 @@ void LocoNetESP32Uart::rxtxTask() {
 					_state = TX;
 					while(uxQueueMessagesWaiting(_txQueue) > 0 && _state == TX) {
 						uint8_t out;
+						uint32_t t0=0;
 						if(xQueueReceive(_txQueue, &out, (portTickType)1)) {
 							uartWrite(_uart, out);
 							// wait for echo byte before sending next byte
+							uint32_t t1=micros();
 							while(!uartAvailable(_uart)) {
 								esp_task_wdt_reset();
 								delay(1);
 							}
+							t0 += (micros()-t1);
+							Serial.printf("Took %d\n", t0);
 							// check echoed byte for collision
 							if(uartRead(_uart) != out) {
 								startCollisionTimer();
