@@ -1,5 +1,6 @@
 #include "LocoNetESP32Hybrid.h"
 #include <esp_task_wdt.h>
+#include <HardwareSerial.h>
 
 
 constexpr UBaseType_t LocoNetRXTXThreadPriority = 1;
@@ -40,21 +41,21 @@ void taskEntryPoint(void *param) {
 }
 
 
-LocoNetESP32Hybrid::LocoNetESP32Hybrid(LocoNetBus *bus, uint8_t rxPin, uint8_t txPin, uint8_t uartNum, 
+LocoNetESP32Hybrid::LocoNetESP32Hybrid(LocoNetBus *bus, uint8_t rxPin, uint8_t txPin, uint8_t uartNum,
 		bool invertedRx, bool invertedTx, const int timerId, const BaseType_t preferedCore
 		) :
-	LocoNetPhy(bus), _rxPin(rxPin), _txPin(txPin), _invertedRx(invertedRx), _invertedTx(invertedTx), 
+	LocoNetPhy(bus), _rxPin(rxPin), _txPin(txPin), _invertedRx(invertedRx), _invertedTx(invertedTx),
 	_preferedCore(preferedCore), TX_HIGH_VAL(invertedTx?LOW:HIGH), RX_HIGH_VAL(invertedRx?LOW:HIGH), _state(IDLE), _timerId(timerId)
 {
 	_inst = this;
 
 	DEBUG("Initializing UART%d with RX:%d(%c), TX:%d(%c), timer %d", uartNum, _rxPin, _invertedRx?'I':'n', _txPin, _invertedTx?'I':'n', _timerId);
 	_uart = uartBegin(uartNum, 16667, SERIAL_8N1, _rxPin, -1, 256, _invertedRx);
-	/*if(_invertedRx) {		
+	/*if(_invertedRx) {
 		uartDetachRx(_uart);
 		uartAttachRx(_uart, _rxPin, true);
 	}*/
-	
+
 	/*if(_invertedTx) {
 		uartDetachTx(_uart);
 		uartAttachTx(_uart, _txPin, true);
@@ -70,7 +71,7 @@ LocoNetESP32Hybrid::LocoNetESP32Hybrid(LocoNetBus *bus, uint8_t rxPin, uint8_t t
 
 	pinMode(_txPin, OUTPUT);
 	digitalWrite(_txPin, TX_IDLE_VAL); // release bus
-	
+
 }
 
 bool LocoNetESP32Hybrid::begin() {
@@ -93,16 +94,16 @@ bool LocoNetESP32Hybrid::begin() {
 		return false;
 	}
 
-	_lnTimer = timerBegin(_timerId, 480, true);
+	_lnTimer = timerBegin(1000000 / 60); // 60us
 	if(_lnTimer==nullptr) {
 		printf("LocoNet ERROR: Could not create timer!\n");
 		return false;
 	}
-    timerAttachInterrupt(_lnTimer, &txTimerCb, true);
-    timerAlarmWrite(_lnTimer, 10, true);
+    timerAttachInterrupt(_lnTimer, &txTimerCb);
+    timerAlarm(_lnTimer, 10, true, 0);
 	//timerAlarmWrite(_lnTimer, 10000, true);
 	//timerAlarmEnable(_lnTimer);
-	timerAlarmEnable(_lnTimer);
+	//timerAlarmEnable(_lnTimer);
 	timerStop(_lnTimer);
 
 	return true;
@@ -162,7 +163,7 @@ void LocoNetESP32Hybrid::rxtxTask() {
 	while(true) {
 		//esp_task_wdt_reset();
 		// process incoming first
-		
+
 		if(uartAvailable(_uart)) {
 			DEBUG("RX Begin");
 			// start RX to consume available data
@@ -195,10 +196,10 @@ void LocoNetESP32Hybrid::rxtxTask() {
 						uint32_t t0=0;
 						if(xQueueReceive(_txQueue, &out, (portTickType)1)) {
 							DEBUG("sending %02x -> %04x", out, txByte);
-							txByte = 1<<9 | out<<1 | 0; 
+							txByte = 1<<9 | out<<1 | 0;
 							txBit = 0;
 							//timerAlarmEnable(_lnTimer);
-							
+
 							timerRestart(_lnTimer);
 
 							// wait for echo byte before sending next byte

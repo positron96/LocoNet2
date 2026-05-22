@@ -1,5 +1,6 @@
 #include "LocoNetESP32UART.h"
 #include <esp_task_wdt.h>
+#include <HardwareSerial.h>
 
 constexpr UBaseType_t LocoNetRXTXThreadPriority = 1;
 constexpr uint32_t LocoNetRXTXThreadStackSize = 2048;
@@ -23,15 +24,64 @@ extern "C" void uartDetachTx(uart_t* uart);
 extern "C" void uartAttachRx(uart_t* uart, uint8_t rxPin, bool inverted);
 extern "C" void uartAttachTx(uart_t* uart, uint8_t txPin, bool inverted);
 
-LocoNetESP32Uart::LocoNetESP32Uart(LocoNetBus *bus, uint8_t rxPin, uint8_t txPin, uint8_t uartNum, 
+/*
+
+void uartDetachRx(uart_t* uart, uint8_t rxPin)
+{
+    if(uart == NULL) {
+        return;
+    }
+    pinMatrixInDetach(rxPin, false, false);
+    uartDisableInterrupt(uart);
+}
+
+void uartDetachTx(uart_t* uart, uint8_t txPin)
+{
+    if(uart == NULL) {
+        return;
+    }
+    pinMatrixOutDetach(txPin, false, false);
+}
+
+void uartAttachRx(uart_t* uart, uint8_t rxPin, bool inverted)
+{
+    if(uart == NULL || rxPin > 39) {
+        return;
+    }
+    pinMode(rxPin, INPUT);
+    pinMatrixInAttach(rxPin, UART_RXD_IDX(uart->num), inverted);
+    uartEnableInterrupt(uart);
+}
+
+void uartAttachTx(uart_t* uart, uint8_t txPin, bool inverted)
+{
+    if(uart == NULL || txPin > 39) {
+        return;
+    }
+    pinMode(txPin, OUTPUT);
+    pinMatrixOutAttach(txPin, UART_TXD_IDX(uart->num), inverted, false);
+}
+
+
+*/
+
+/*
+ * Returns the status of the RX state machine, if the value is non-zero the state machine is active.
+ */
+bool uartRxActive(uart_t* uart) {
+    return uart->dev->status.st_urx_out != 0;
+}
+
+
+LocoNetESP32Uart::LocoNetESP32Uart(LocoNetBus *bus, uint8_t rxPin, uint8_t txPin, uint8_t uartNum,
 		bool invertedRx, bool invertedTx, bool enablePullup, const BaseType_t preferedCore
 		) :
-	LocoNetPhy(bus), _rxPin(rxPin), _txPin(txPin), _invertedRx(invertedRx), _invertedTx(invertedTx), 
-	_preferedCore(preferedCore), _state(IDLE) 
+	LocoNetPhy(bus), _rxPin(rxPin), _txPin(txPin), _invertedRx(invertedRx), _invertedTx(invertedTx),
+	_preferedCore(preferedCore), _state(IDLE)
 {
 	DEBUG("Initializing UART(%d) with RX:%d, TX:%d", uartNum, _rxPin, _txPin);
 	_uart = uartBegin(uartNum, 16667, SERIAL_8N1, _rxPin, _txPin, 256, false);
-	if(_invertedRx) {		
+	if(_invertedRx) {
 		uartDetachRx(_uart);
 		uartAttachRx(_uart, _rxPin, true);
 	}
