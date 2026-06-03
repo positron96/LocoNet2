@@ -43,24 +43,17 @@
 #include "hal/uart_types.h"
 #include "esp32-hal.h"
 
-// The following line is fron the ESP32 SDK file: Arduino15/packages/esp32/hardware/esp32/2.0.4/tools/sdk/esp32/include/hal/esp32/include/hal/uart_ll.h
-#if defined(UART2)
-    #define UART_LL_GET_HW(num) (((num) == 0) ? (&UART0) : (((num) == 1) ? (&UART1) : (&UART2)))
-#else
-    #define UART_LL_GET_HW(num) (((num) == 0) ? (&UART0) : (&UART1))
-#endif
-
 class LocoNetStreamESP32: public LocoNetStream
 {
 public:
-    LocoNetStreamESP32 (int esp32UartNumber, int8_t rxPin, int8_t txPin, bool rxInvert, bool txInvert, LocoNetBus *bus) : LocoNetStream (bus)
+    LocoNetStreamESP32 (HardwareSerial &serial, int8_t rxPin, int8_t txPin, bool rxInvert, bool txInvert, LocoNetBus *bus) : LocoNetStream (bus)
     {
-        _uart_nr = (uart_port_t) esp32UartNumber;
+        _uart_nr = (uart_port_t) getUartNum(&serial);
         _rxPin = rxPin;
         _rxInvert = rxInvert;
         _txPin = txPin;
         _txInvert = txInvert;
-        _serialPort = new HardwareSerial (_uart_nr);
+        _serialPort = &serial;
     };
 
     void start (void)
@@ -87,7 +80,7 @@ public:
 
     bool isBusy (void)
     {
-        uart_dev_t *hw = UART_LL_GET_HW (_uart_nr);
+        uart_dev_t *hw = getUart (_uart_nr);
 
         #if defined(CONFIG_IDF_TARGET_ESP32)
         return hw->status.st_urx_out != 0;
@@ -125,7 +118,7 @@ private:
 
     uint32_t updateRxFifoFullThreshold (uint32_t newThreshold)
     {
-        uart_dev_t *hw = UART_LL_GET_HW (_uart_nr);
+        uart_dev_t *hw = getUart (_uart_nr);
 
         uint32_t oldThreshold = hw->conf1.rxfifo_full_thrhd;
         hw->conf1.rxfifo_full_thrhd = newThreshold;
@@ -133,6 +126,47 @@ private:
         return oldThreshold;
     };
 
+    static uart_dev_t* getUart(const int uartNum) {
+        if(uartNum == 0) return &UART0;
+    #if SOC_UART_NUM > 1
+        if(uartNum == 1) return &UART1;
+    #endif
+    #if SOC_UART_NUM > 2
+        if(uartNum == 2) return &UART2;
+    #endif
+    #if SOC_UART_NUM > 3
+        if(uartNum == 3) return &UART3;
+    #endif
+    #if SOC_UART_NUM > 4
+        if(uartNum == 4) return &UART4;
+    #endif
+    #if SOC_UART_NUM > 5
+        if(uartNum == 5) return &UART5;
+    #endif
+        assert(false);  // fail fast
+        return nullptr;
+    }
+
+    static int getUartNum(const HardwareSerial *serial) {
+        if(serial == &Serial0) return 0;
+    #if SOC_UART_NUM > 1
+        if(serial == &Serial1) return 1;
+    #endif
+    #if SOC_UART_NUM > 2
+        if(serial == &Serial2) return 2;
+    #endif
+    #if SOC_UART_NUM > 3
+        if(serial == &Serial3) return 3;
+    #endif
+    #if SOC_UART_NUM > 4
+        if(serial == &Serial4) return 4;
+    #endif
+    #if SOC_UART_NUM > 5
+        if(serial == &Serial5) return 5;
+    #endif
+        assert(false);  // fail fast
+        return 0;
+    }
 
 };
 #endif	// ARDUINO_ARCH_ESP32
